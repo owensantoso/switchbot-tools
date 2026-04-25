@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ENV_FILE="${HOME}/.switchbot.env"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_PATH="${0:A}"
+SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_PATH}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CLI_CLOUD="${REPO_ROOT}/scripts/switchbot_cli.py"
 CLI_LOCAL="${REPO_ROOT}/scripts/switchbot_ble.py"
