@@ -1,0 +1,269 @@
+#!/bin/zsh
+set -euo pipefail
+
+ENV_FILE="${HOME}/.switchbot.env"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CLI_CLOUD="${REPO_ROOT}/scripts/switchbot_cli.py"
+CLI_LOCAL="${REPO_ROOT}/scripts/switchbot_ble.py"
+if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
+  PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
+else
+  PYTHON_BIN="${PYTHON:-python3}"
+fi
+
+if [[ -f "${ENV_FILE}" ]]; then
+  source "${ENV_FILE}"
+fi
+
+show_help() {
+  cat <<'EOF'
+Usage:
+  switchbot-tools lights [--ble|-b] [--discover] purple [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] white [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] warm-white [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] soft-white [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] neutral-white [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] cool-white [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] daylight [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] gold [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] yellow [--brightness N]
+  switchbot-tools lights [--ble|-b] [--discover] off
+  switchbot-tools lights [--ble|-b] [--discover] on
+  switchbot-tools lights [--ble|-b] [--discover] resume
+  switchbot-tools lights toggle
+  switchbot-tools lights [--ble|-b] scan [--timeout N]
+  switchbot-tools scene "Scene Name"
+  switchbot-tools dim
+  switchbot-tools devices
+  switchbot-tools raw <switchbot_cli.py args...>
+  switchbot-tools --help
+
+Options:
+  --ble, -b     Use direct Bluetooth instead of the SwitchBot cloud API
+  --discover    Refresh the BLE device cache before running a local command
+  --max         Shortcut for --brightness 100
+  --help        Show this help
+
+Compatibility:
+  sblights purple [--brightness N]
+  sblights white [--brightness N]
+  sblights warm-white [--brightness N]
+  sblights soft-white [--brightness N]
+  sblights neutral-white [--brightness N]
+  sblights cool-white [--brightness N]
+  sblights daylight [--brightness N]
+  sblights gold [--brightness N]
+  sblights yellow [--brightness N]
+  sblights off
+  sblights on
+  sblights resume
+  sblights toggle
+  sblights dim
+  sblights scene "Scene Name"
+  sblights devices
+EOF
+}
+
+if [[ "${1:-}" == "lights" ]]; then
+  shift
+elif [[ "${1:-}" == "scene" ]]; then
+  shift
+  if [[ $# -eq 0 ]]; then
+    echo "Usage: switchbot-tools scene \"Scene Name\"" >&2
+    exit 1
+  fi
+  if [[ -f "${ENV_FILE}" ]]; then
+    source "${ENV_FILE}"
+  fi
+  "${PYTHON_BIN}" "${CLI_CLOUD}" scene-name "$*"
+  exit 0
+elif [[ "${1:-}" == "dim" ]]; then
+  shift
+  if [[ -f "${ENV_FILE}" ]]; then
+    source "${ENV_FILE}"
+  fi
+  "${PYTHON_BIN}" "${CLI_CLOUD}" scene-name "Dim lights"
+  exit 0
+elif [[ "${1:-}" == "devices" ]]; then
+  shift
+  if [[ -f "${ENV_FILE}" ]]; then
+    source "${ENV_FILE}"
+  fi
+  "${PYTHON_BIN}" "${CLI_CLOUD}" devices "$@"
+  exit 0
+elif [[ "${1:-}" == "raw" ]]; then
+  shift
+  if [[ -f "${ENV_FILE}" ]]; then
+    source "${ENV_FILE}"
+  fi
+  "${PYTHON_BIN}" "${CLI_CLOUD}" "$@"
+  exit 0
+fi
+
+local_mode=0
+discover_mode=0
+max_mode=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --ble|-b|--local)
+      local_mode=1
+      shift
+      ;;
+    --discover)
+      discover_mode=1
+      shift
+      ;;
+    --max)
+      max_mode=1
+      shift
+      ;;
+    --help|-h|help)
+      show_help
+      exit 0
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
+cmd="${1:-}"
+if [[ -z "${cmd}" ]]; then
+  show_help >&2
+  exit 1
+fi
+shift
+
+extra_args=()
+for arg in "$@"; do
+  if [[ "${arg}" == "--max" ]]; then
+    max_mode=1
+    continue
+  fi
+  extra_args+=("${arg}")
+done
+if [[ "${max_mode}" -eq 1 ]]; then
+  extra_args=(--brightness 100 "${extra_args[@]}")
+fi
+
+if [[ "${local_mode}" -eq 1 ]]; then
+  discover_args=()
+  if [[ "${discover_mode}" -eq 1 ]]; then
+    discover_args+=(--discover)
+  fi
+
+  case "${cmd}" in
+    purple)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 128 --g 0 --b 128 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    white)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    warm-white|warm)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 2700 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    soft-white)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 3000 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    neutral-white)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    cool-white|cool)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 5500 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    daylight)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 6500 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    gold|yellow)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 190 --b 0 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    off)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all off --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    on)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    resume)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      ;;
+    toggle)
+      echo "Toggle is only available via the cloud SwitchBot API right now." >&2
+      exit 2
+      ;;
+    scan)
+      "${PYTHON_BIN}" "${CLI_LOCAL}" scan "${extra_args[@]}"
+      ;;
+    dim|scene)
+      echo "Scenes are only available via the cloud SwitchBot API, not direct BLE." >&2
+      exit 2
+      ;;
+    *)
+      show_help >&2
+      exit 1
+      ;;
+  esac
+  exit 0
+fi
+
+if [[ -z "${SWITCHBOT_TOKEN:-}" || -z "${SWITCHBOT_SECRET:-}" ]]; then
+  echo "Missing SwitchBot credentials in ${ENV_FILE}" >&2
+  exit 2
+fi
+
+case "${cmd}" in
+  purple)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-purple --parallel 8 "${extra_args[@]}"
+    ;;
+  white)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-white --parallel 8 "${extra_args[@]}"
+    ;;
+  warm-white|warm)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-warm-white --parallel 8 "${extra_args[@]}"
+    ;;
+  soft-white)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-soft-white --parallel 8 "${extra_args[@]}"
+    ;;
+  neutral-white)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-neutral-white --parallel 8 "${extra_args[@]}"
+    ;;
+  cool-white|cool)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-cool-white --parallel 8 "${extra_args[@]}"
+    ;;
+  daylight)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-daylight --parallel 8 "${extra_args[@]}"
+    ;;
+  gold|yellow)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-gold --parallel 8 "${extra_args[@]}"
+    ;;
+  off)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-off --parallel 8 "${extra_args[@]}"
+    ;;
+  on)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-on --parallel 8 "${extra_args[@]}"
+    ;;
+  resume)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-on --parallel 8 "${extra_args[@]}"
+    ;;
+  toggle)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-toggle --parallel 8 "${extra_args[@]}"
+    ;;
+  dim)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" scene-name "Dim lights"
+    ;;
+  scene)
+    if [[ ${#extra_args[@]} -eq 0 ]]; then
+      echo "Usage: switchbot-tools scene \"Scene Name\"" >&2
+      exit 1
+    fi
+    "${PYTHON_BIN}" "${CLI_CLOUD}" scene-name "${extra_args[*]}"
+    ;;
+  devices)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" devices "${extra_args[@]}"
+    ;;
+  *)
+    show_help >&2
+    exit 1
+    ;;
+esac
