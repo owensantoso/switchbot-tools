@@ -110,6 +110,42 @@ def list_devices(token: str, secret: str) -> None:
         )
 
 
+def get_devices(token: str, secret: str) -> list[dict[str, Any]]:
+    resp = api_request("GET", "/devices", token, secret)
+    return resp.get("body", {}).get("deviceList", [])
+
+
+def resolve_device_id(token: str, secret: str, target: str) -> str:
+    devices = get_devices(token, secret)
+    normalized = target.strip().casefold()
+
+    for dev in devices:
+        if str(dev.get("deviceId", "")).casefold() == normalized:
+            return str(dev["deviceId"])
+
+    exact = [
+        dev
+        for dev in devices
+        if str(dev.get("deviceName", "")).strip().casefold() == normalized
+    ]
+    if exact:
+        return str(exact[0]["deviceId"])
+
+    partial = [
+        dev
+        for dev in devices
+        if normalized in str(dev.get("deviceName", "")).strip().casefold()
+    ]
+    if len(partial) == 1:
+        return str(partial[0]["deviceId"])
+    if not partial:
+        print(f"No device found matching: {target}", file=sys.stderr)
+    else:
+        names = ", ".join(str(dev.get("deviceName")) for dev in partial)
+        print(f"Multiple devices matched '{target}': {names}", file=sys.stderr)
+    sys.exit(2)
+
+
 def get_status(token: str, secret: str, device_id: str) -> None:
     print_json(api_request("GET", f"/devices/{device_id}/status", token, secret))
 
@@ -333,6 +369,63 @@ def set_all_gold(
     set_all_color(token, secret, 255, 190, 0, brightness, parallel)
 
 
+def set_all_brightness(
+    token: str,
+    secret: str,
+    brightness: int,
+    parallel: int = 8,
+) -> None:
+    devices = iter_light_devices(token, secret)
+
+    def run_for_device(dev: dict[str, Any]) -> dict[str, Any]:
+        device_id = str(dev.get("deviceId"))
+        name = str(dev.get("deviceName"))
+        bright = api_request(
+            "POST",
+            f"/devices/{device_id}/commands",
+            token,
+            secret,
+            command_body("setBrightness", str(brightness)),
+        )
+        return {
+            "deviceId": device_id,
+            "deviceName": name,
+            "setBrightness": bright.get("body"),
+        }
+
+    results: list[dict[str, Any]] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, parallel)) as executor:
+        futures = [executor.submit(run_for_device, dev) for dev in devices]
+        for future in concurrent.futures.as_completed(futures):
+            results.append(future.result())
+
+    results.sort(key=lambda item: item["deviceName"])
+    print_json(results)
+
+
+def get_all_light_status(token: str, secret: str, parallel: int = 8) -> None:
+    devices = iter_light_devices(token, secret)
+
+    def run_for_device(dev: dict[str, Any]) -> dict[str, Any]:
+        device_id = str(dev.get("deviceId"))
+        name = str(dev.get("deviceName"))
+        status = api_request("GET", f"/devices/{device_id}/status", token, secret)
+        return {
+            "deviceId": device_id,
+            "deviceName": name,
+            "status": status.get("body"),
+        }
+
+    results: list[dict[str, Any]] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, parallel)) as executor:
+        futures = [executor.submit(run_for_device, dev) for dev in devices]
+        for future in concurrent.futures.as_completed(futures):
+            results.append(future.result())
+
+    results.sort(key=lambda item: item["deviceName"])
+    print_json(results)
+
+
 def turn_all_off(token: str, secret: str, parallel: int = 8) -> None:
     devices = iter_light_devices(token, secret)
 
@@ -456,12 +549,27 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("devices", help="List devices on the account")
     sub.add_parser("scenes", help="List manual scenes")
+    p_all_brightness = sub.add_parser("all-brightness", help="Set brightness on all SwitchBot lights")
+    p_all_brightness.add_argument("brightness", type=int)
+    p_all_brightness.add_argument("--parallel", type=int, default=8)
+    p_all_color = sub.add_parser("all-color", help="Set all SwitchBot lights to an RGB color")
+    p_all_color.add_argument("r", type=int)
+    p_all_color.add_argument("g", type=int)
+    p_all_color.add_argument("b", type=int)
+    p_all_color.add_argument("--brightness", type=int, default=100)
+    p_all_color.add_argument("--parallel", type=int, default=8)
+    p_all_temp = sub.add_parser("all-temp", help="Set all SwitchBot lights to a color temperature")
+    p_all_temp.add_argument("value", type=int)
+    p_all_temp.add_argument("--brightness", type=int, default=100)
+    p_all_temp.add_argument("--parallel", type=int, default=8)
     p_all_on = sub.add_parser("all-on", help="Turn all SwitchBot lights on using their remembered state")
     p_all_on.add_argument("--parallel", type=int, default=8)
     p_all_off = sub.add_parser("all-off", help="Turn all SwitchBot lights off")
     p_all_off.add_argument("--parallel", type=int, default=8)
     p_all_toggle = sub.add_parser("all-toggle", help="Toggle all SwitchBot lights based on current state")
     p_all_toggle.add_argument("--parallel", type=int, default=8)
+    p_all_status = sub.add_parser("all-status", help="Get status for all SwitchBot lights")
+    p_all_status.add_argument("--parallel", type=int, default=8)
     p_all_purple = sub.add_parser("all-purple", help="Turn all SwitchBot lights on and purple")
     p_all_purple.add_argument("--brightness", type=int, default=100)
     p_all_purple.add_argument("--parallel", type=int, default=8)
@@ -488,7 +596,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_all_gold.add_argument("--parallel", type=int, default=8)
 
     p_status = sub.add_parser("status", help="Get device status")
-    p_status.add_argument("device_id")
+    p_status.add_argument("device")
 
     p_scene = sub.add_parser("scene", help="Execute a manual scene by id")
     p_scene.add_argument("scene_id")
@@ -498,18 +606,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     for name in ("on", "off", "toggle"):
         p = sub.add_parser(name, help=f"Send {name} command")
-        p.add_argument("device_id")
+        p.add_argument("device")
 
     p_brightness = sub.add_parser("brightness", help="Set brightness 1-100")
-    p_brightness.add_argument("device_id")
+    p_brightness.add_argument("device")
     p_brightness.add_argument("value", type=int)
 
     p_temp = sub.add_parser("temp", help="Set color temperature 2700-6500")
-    p_temp.add_argument("device_id")
+    p_temp.add_argument("device")
     p_temp.add_argument("value", type=int)
 
     p_color = sub.add_parser("color", help="Set RGB color 0-255 0-255 0-255")
-    p_color.add_argument("device_id")
+    p_color.add_argument("device")
     p_color.add_argument("r", type=int)
     p_color.add_argument("g", type=int)
     p_color.add_argument("b", type=int)
@@ -528,6 +636,26 @@ def main() -> None:
     if args.cmd == "scenes":
         list_scenes(token, secret)
         return
+    if args.cmd == "all-brightness":
+        if not 1 <= args.brightness <= 100:
+            parser.error("brightness must be between 1 and 100")
+        set_all_brightness(token, secret, args.brightness, args.parallel)
+        return
+    if args.cmd == "all-color":
+        rgb = (args.r, args.g, args.b)
+        if any(v < 0 or v > 255 for v in rgb):
+            parser.error("RGB values must each be between 0 and 255")
+        if not 1 <= args.brightness <= 100:
+            parser.error("brightness must be between 1 and 100")
+        set_all_color(token, secret, args.r, args.g, args.b, args.brightness, args.parallel)
+        return
+    if args.cmd == "all-temp":
+        if not 2700 <= args.value <= 6500:
+            parser.error("temp must be between 2700 and 6500")
+        if not 1 <= args.brightness <= 100:
+            parser.error("brightness must be between 1 and 100")
+        set_all_temp(token, secret, args.value, args.brightness, args.parallel)
+        return
     if args.cmd == "all-on":
         turn_all_on(token, secret, args.parallel)
         return
@@ -536,6 +664,9 @@ def main() -> None:
         return
     if args.cmd == "all-toggle":
         toggle_all(token, secret, args.parallel)
+        return
+    if args.cmd == "all-status":
+        get_all_light_status(token, secret, args.parallel)
         return
     if args.cmd == "all-purple":
         if not 1 <= args.brightness <= 100:
@@ -578,7 +709,7 @@ def main() -> None:
         set_all_gold(token, secret, args.brightness, args.parallel)
         return
     if args.cmd == "status":
-        get_status(token, secret, args.device_id)
+        get_status(token, secret, resolve_device_id(token, secret, args.device))
         return
     if args.cmd == "scene":
         run_scene(token, secret, args.scene_id)
@@ -587,18 +718,18 @@ def main() -> None:
         run_scene_by_name(token, secret, args.scene_name)
         return
     if args.cmd == "on":
-        send_command(token, secret, args.device_id, command_body("turnOn"))
+        send_command(token, secret, resolve_device_id(token, secret, args.device), command_body("turnOn"))
         return
     if args.cmd == "off":
-        send_command(token, secret, args.device_id, command_body("turnOff"))
+        send_command(token, secret, resolve_device_id(token, secret, args.device), command_body("turnOff"))
         return
     if args.cmd == "toggle":
-        send_command(token, secret, args.device_id, command_body("toggle"))
+        send_command(token, secret, resolve_device_id(token, secret, args.device), command_body("toggle"))
         return
     if args.cmd == "brightness":
         if not 1 <= args.value <= 100:
             parser.error("brightness must be between 1 and 100")
-        send_command(token, secret, args.device_id, command_body("setBrightness", str(args.value)))
+        send_command(token, secret, resolve_device_id(token, secret, args.device), command_body("setBrightness", str(args.value)))
         return
     if args.cmd == "temp":
         if not 2700 <= args.value <= 6500:
@@ -606,7 +737,7 @@ def main() -> None:
         send_command(
             token,
             secret,
-            args.device_id,
+            resolve_device_id(token, secret, args.device),
             command_body("setColorTemperature", str(args.value)),
         )
         return
@@ -617,7 +748,7 @@ def main() -> None:
         send_command(
             token,
             secret,
-            args.device_id,
+            resolve_device_id(token, secret, args.device),
             command_body("setColor", f"{args.r}:{args.g}:{args.b}"),
         )
         return
