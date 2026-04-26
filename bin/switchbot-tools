@@ -47,6 +47,8 @@ Options:
   --ble, -b     Use direct Bluetooth instead of the SwitchBot cloud API
   --discover    Refresh the BLE device cache before running a local command
   --max         Shortcut for --brightness 100
+  --verbose, -v Print BLE timing diagnostics to stderr
+  --jsonl-path  Write BLE timing events to a specific JSONL file
   --help        Show this help
 
 Examples:
@@ -233,6 +235,8 @@ fi
 local_mode=0
 discover_mode=0
 max_mode=0
+verbose_mode=0
+jsonl_path=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -247,6 +251,18 @@ while [[ $# -gt 0 ]]; do
     --max)
       max_mode=1
       shift
+      ;;
+    --verbose|-v|--debug)
+      verbose_mode=1
+      shift
+      ;;
+    --jsonl-path)
+      if [[ $# -lt 2 ]]; then
+        echo "Usage: --jsonl-path <path>" >&2
+        exit 1
+      fi
+      jsonl_path="$2"
+      shift 2
       ;;
     --help|-h|help)
       show_help
@@ -285,49 +301,56 @@ if [[ "${local_mode}" -eq 1 ]]; then
   if [[ "${discover_mode}" -eq 1 ]]; then
     discover_args+=(--discover)
   fi
+  debug_args=()
+  if [[ "${verbose_mode}" -eq 1 ]]; then
+    debug_args+=(--verbose)
+  fi
+  if [[ -n "${jsonl_path}" ]]; then
+    debug_args+=(--jsonl-path "${jsonl_path}")
+  fi
 
   case "${cmd}" in
     purple)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 128 --g 0 --b 128 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 128 --g 0 --b 128 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     white)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     warm-white|warm)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 2700 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 2700 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     soft-white)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 3000 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 3000 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     neutral-white)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     cool-white|cool)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 5500 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 5500 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     daylight)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 6500 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 6500 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     gold|yellow)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 190 --b 0 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 190 --b 0 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     red)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 0 --b 0 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 0 --b 0 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     green)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 180 --b 80 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 180 --b 80 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     blue)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 90 --b 255 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 90 --b 255 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     pink)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 80 --b 180 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 80 --b 180 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     orange)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 120 --b 0 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 120 --b 0 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     cyan)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 200 --b 255 --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 200 --b 255 --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     rgb)
       if [[ ${#extra_args[@]} -lt 3 ]]; then
@@ -338,7 +361,7 @@ if [[ "${local_mode}" -eq 1 ]]; then
       if [[ "${max_mode}" -eq 1 ]]; then
         remaining_args=(--brightness 100 "${remaining_args[@]}")
       fi
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r "${extra_args[1]}" --g "${extra_args[2]}" --b "${extra_args[3]}" --parallel 4 "${discover_args[@]}" "${remaining_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r "${extra_args[1]}" --g "${extra_args[2]}" --b "${extra_args[3]}" --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${remaining_args[@]}"
       ;;
     temp)
       if [[ ${#extra_args[@]} -lt 1 ]]; then
@@ -349,23 +372,23 @@ if [[ "${local_mode}" -eq 1 ]]; then
       if [[ "${max_mode}" -eq 1 ]]; then
         remaining_args=(--brightness 100 "${remaining_args[@]}")
       fi
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value "${extra_args[1]}" --parallel 4 "${discover_args[@]}" "${remaining_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value "${extra_args[1]}" --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${remaining_args[@]}"
       ;;
     brightness)
       if [[ ${#extra_args[@]} -lt 1 ]]; then
         echo "Usage: switchbot-tools lights brightness N" >&2
         exit 1
       fi
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all brightness --value "${extra_args[1]}" --parallel 4 "${discover_args[@]}" "${extra_args[@]:1}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all brightness --value "${extra_args[1]}" --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]:1}"
       ;;
     off)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all off --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all off --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     on)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     resume)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel 4 "${discover_args[@]}" "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel 4 "${discover_args[@]}" "${debug_args[@]}" "${extra_args[@]}"
       ;;
     toggle)
       echo "Toggle is only available via the cloud SwitchBot API right now." >&2
@@ -376,7 +399,7 @@ if [[ "${local_mode}" -eq 1 ]]; then
       exit 2
       ;;
     scan)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" scan "${extra_args[@]}"
+      "${PYTHON_BIN}" "${CLI_LOCAL}" scan "${debug_args[@]}" "${extra_args[@]}"
       ;;
     dim|scene|rainbow)
       echo "Scenes are only available via the cloud SwitchBot API, not direct BLE." >&2

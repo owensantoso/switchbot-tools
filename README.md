@@ -197,6 +197,12 @@ Scan first:
 switchbot-tools lights --ble scan --timeout 5
 ```
 
+For timing diagnostics in the terminal and a JSONL event trail:
+
+```sh
+switchbot-tools lights --ble scan --timeout 5 --verbose
+```
+
 Then run commands from the cached BLE device list:
 
 ```sh
@@ -211,10 +217,39 @@ switchbot-tools lights --ble off
 Use `--discover` to refresh nearby devices before a command:
 
 ```sh
-switchbot-tools lights --ble --discover gold
+switchbot-tools lights --ble --discover gold --verbose
 ```
 
 Cloud-only commands include scenes, `toggle`, and status checks.
+
+### BLE Profiling
+
+BLE commands now write timestamped JSONL events so it is easier to see whether time is going into discovery, cache loading, semaphore wait time, device object creation, or the actual BLE write.
+
+Defaults:
+
+- log file: `logs/switchbot-ble.jsonl`
+- cache file: `~/.switchbot_ble_lights.json`
+
+Useful commands:
+
+```sh
+switchbot-tools lights --ble scan --timeout 5 --verbose
+switchbot-tools lights --ble --discover warm-white --brightness 60 --verbose
+switchbot-tools lights --ble warm-white --brightness 60 --verbose
+```
+
+To send the JSONL somewhere else:
+
+```sh
+switchbot-tools lights --ble warm-white --verbose --jsonl-path /tmp/switchbot-ble.jsonl
+```
+
+Or with an environment variable:
+
+```sh
+export SWITCHBOT_BLE_LOG_PATH=/tmp/switchbot-ble.jsonl
+```
 
 ## Troubleshooting
 
@@ -229,6 +264,7 @@ Common checks:
 - `Missing SwitchBot credentials`: create or update `~/.switchbot.env`.
 - `No device found matching`: run `switchbot-tools devices` and use a more specific name or device ID.
 - BLE commands cannot find lights: run `switchbot-tools lights --ble scan --timeout 5`, then retry.
+- BLE feels slow: compare a `--discover` run with a cached run and inspect `logs/switchbot-ble.jsonl` to see where the time went.
 - BLE package missing: reinstall with the quick install command or run `pip install -r requirements.txt` in the repo venv.
 
 ## Roadmap Ideas
