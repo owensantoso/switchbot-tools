@@ -191,7 +191,7 @@ switchbot-tools raw brightness DEVICE_ID 35
 
 BLE mode talks directly to nearby SwitchBot bulbs and light strips using `PySwitchbot`.
 
-By default, BLE writes now use a fast path that skips the library's extra post-write refresh and uses a default BLE parallelism of `6`. You can override the concurrency with `--parallel N` or `SWITCHBOT_BLE_PARALLEL`. You can also exclude flaky devices with `--exclude-address` or `SWITCHBOT_BLE_EXCLUDE_ADDRESSES`.
+By default, BLE writes now use a fast path that skips the library's extra post-write refresh and uses a default BLE parallelism of `6`. `switchbot-tools lights --ble ...` now also routes through a small persistent local daemon by default so repeated commands can reuse warm BLE connections. You can override the concurrency with `--parallel N` or `SWITCHBOT_BLE_PARALLEL`. You can also exclude flaky devices with `--exclude-address` or `SWITCHBOT_BLE_EXCLUDE_ADDRESSES`.
 
 Scan first:
 
@@ -214,6 +214,20 @@ switchbot-tools lights --ble brightness 70
 switchbot-tools lights --ble off
 ```
 
+Daemon helpers:
+
+```sh
+switchbot-tools ble-daemon start
+switchbot-tools ble-daemon status
+switchbot-tools ble-daemon stop
+```
+
+If you want to compare against the old one-shot direct BLE path, bypass the daemon:
+
+```sh
+switchbot-tools lights --ble off --no-daemon
+```
+
 `rainbow` is currently cloud-only because it intentionally spreads a palette across all cloud-visible lights rather than sending one BLE color to every nearby device.
 
 Use `--discover` to refresh nearby devices before a command:
@@ -226,7 +240,7 @@ Cloud-only commands include scenes, `toggle`, and status checks.
 
 ### BLE Profiling
 
-BLE commands now write timestamped JSONL events so it is easier to see whether time is going into discovery, cache loading, semaphore wait time, device object creation, or the actual BLE write.
+BLE commands now write timestamped JSONL events so it is easier to see whether time is going into discovery, cache loading, daemon autostart, request handoff, semaphore wait time, device object creation, connection reuse, or the actual BLE write.
 
 Defaults:
 
@@ -241,6 +255,7 @@ switchbot-tools lights --ble --discover warm-white --brightness 60 --verbose
 switchbot-tools lights --ble warm-white --brightness 60 --verbose
 switchbot-tools lights --ble warm-white --brightness 60 --parallel 6 --verbose
 switchbot-tools lights --ble off --parallel 6 --exclude-address F0:9E:9E:9E:E8:02 --verbose
+switchbot-tools ble-daemon status
 ```
 
 To send the JSONL somewhere else:
@@ -254,7 +269,24 @@ Or with an environment variable:
 ```sh
 export SWITCHBOT_BLE_LOG_PATH=/tmp/switchbot-ble.jsonl
 export SWITCHBOT_BLE_EXCLUDE_ADDRESSES=F0:9E:9E:9E:E8:02
+export SWITCHBOT_BLE_DAEMON_DISCONNECT_DELAY=30
 ```
+
+### BLE Daemon Notes
+
+- The first daemon-backed BLE command is usually similar to the direct path because it still has to build live device clients.
+- Repeated commands within the daemon's warm window are the real win: the daemon keeps device objects alive and reuses connected BLE clients when it can.
+- The daemon keeps connections warm for `30` seconds by default. Override that with `SWITCHBOT_BLE_DAEMON_DISCONNECT_DELAY`.
+
+### Daemon Benchmarking
+
+To compare direct BLE with daemon cold and daemon warm runs:
+
+```sh
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/benchmark_ble_daemon.ps1 -Action off -Parallel 6 -DirectIterations 2 -WarmIterations 2 -VerboseLogs
+```
+
+That script writes a summary JSON plus stdout/stderr captures under `benchmark-logs/daemon-*/`.
 
 If you want to compare against the old library behavior with the extra post-write refresh, the lower-level BLE script still supports:
 

@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${SCRIPT_PATH}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CLI_CLOUD="${REPO_ROOT}/scripts/switchbot_cli.py"
 CLI_LOCAL="${REPO_ROOT}/scripts/switchbot_ble.py"
+CLI_DAEMON="${REPO_ROOT}/scripts/switchbot_ble_daemon.py"
 if [[ -x "${REPO_ROOT}/.venv/bin/python" ]]; then
   PYTHON_BIN="${REPO_ROOT}/.venv/bin/python"
 else
@@ -49,6 +50,7 @@ Options:
   --max         Shortcut for --brightness 100
   --verbose, -v Print BLE timing diagnostics to stderr
   --jsonl-path  Write BLE timing events to a specific JSONL file
+  --no-daemon   Bypass the persistent BLE daemon and call the direct BLE CLI
   --parallel N  Set BLE concurrency (default: ${SWITCHBOT_BLE_PARALLEL:-6})
   --exclude-address MAC
                Skip a specific BLE device address in all-lights mode
@@ -233,12 +235,22 @@ elif [[ "${1:-}" == "raw" ]]; then
   fi
   "${PYTHON_BIN}" "${CLI_CLOUD}" "$@"
   exit 0
+elif [[ "${1:-}" == "ble-daemon" ]]; then
+  shift
+  if [[ "${1:-}" == "start" ]]; then
+    shift
+    "${PYTHON_BIN}" "${CLI_DAEMON}" status --autostart "$@"
+  else
+    "${PYTHON_BIN}" "${CLI_DAEMON}" "$@"
+  fi
+  exit $?
 fi
 
 local_mode=0
 discover_mode=0
 max_mode=0
 verbose_mode=0
+no_daemon_mode=0
 jsonl_path=""
 ble_parallel="${SWITCHBOT_BLE_PARALLEL:-6}"
 exclude_args=()
@@ -259,6 +271,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --verbose|-v|--debug)
       verbose_mode=1
+      shift
+      ;;
+    --no-daemon)
+      no_daemon_mode=1
       shift
       ;;
     --jsonl-path)
@@ -329,49 +345,107 @@ if [[ "${local_mode}" -eq 1 ]]; then
   if [[ -n "${jsonl_path}" ]]; then
     debug_args+=(--jsonl-path "${jsonl_path}")
   fi
+  daemon_args=(--parallel "${ble_parallel}" --autostart "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}")
+  direct_args=(--parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}")
 
   case "${cmd}" in
     purple)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 128 --g 0 --b 128 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 128 --g 0 --b 128 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 128 --g 0 --b 128 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     white)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all temp --value 4000 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     warm-white|warm)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 2700 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 2700 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all temp --value 2700 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     soft-white)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 3000 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 3000 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all temp --value 3000 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     neutral-white)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 4000 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all temp --value 4000 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     cool-white|cool)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 5500 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 5500 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all temp --value 5500 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     daylight)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 6500 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value 6500 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all temp --value 6500 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     gold|yellow)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 190 --b 0 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 190 --b 0 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 255 --g 190 --b 0 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     red)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 0 --b 0 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 0 --b 0 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 255 --g 0 --b 0 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     green)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 180 --b 80 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 180 --b 80 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 0 --g 180 --b 80 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     blue)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 90 --b 255 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 90 --b 255 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 0 --g 90 --b 255 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     pink)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 80 --b 180 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 80 --b 180 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 255 --g 80 --b 180 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     orange)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 120 --b 0 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 255 --g 120 --b 0 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 255 --g 120 --b 0 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     cyan)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 200 --b 255 --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r 0 --g 200 --b 255 "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r 0 --g 200 --b 255 "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     rgb)
       if [[ ${#extra_args[@]} -lt 3 ]]; then
@@ -382,7 +456,11 @@ if [[ "${local_mode}" -eq 1 ]]; then
       if [[ "${max_mode}" -eq 1 ]]; then
         remaining_args=(--brightness 100 "${remaining_args[@]}")
       fi
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r "${extra_args[1]}" --g "${extra_args[2]}" --b "${extra_args[3]}" --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${remaining_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all color --r "${extra_args[1]}" --g "${extra_args[2]}" --b "${extra_args[3]}" "${direct_args[@]}" "${remaining_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all color --r "${extra_args[1]}" --g "${extra_args[2]}" --b "${extra_args[3]}" "${daemon_args[@]}" "${remaining_args[@]}"
+      fi
       ;;
     temp)
       if [[ ${#extra_args[@]} -lt 1 ]]; then
@@ -393,23 +471,43 @@ if [[ "${local_mode}" -eq 1 ]]; then
       if [[ "${max_mode}" -eq 1 ]]; then
         remaining_args=(--brightness 100 "${remaining_args[@]}")
       fi
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value "${extra_args[1]}" --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${remaining_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all temp --value "${extra_args[1]}" "${direct_args[@]}" "${remaining_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all temp --value "${extra_args[1]}" "${daemon_args[@]}" "${remaining_args[@]}"
+      fi
       ;;
     brightness)
       if [[ ${#extra_args[@]} -lt 1 ]]; then
         echo "Usage: switchbot-tools lights brightness N" >&2
         exit 1
       fi
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all brightness --value "${extra_args[1]}" --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]:1}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all brightness --value "${extra_args[1]}" "${direct_args[@]}" "${extra_args[@]:1}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all brightness --value "${extra_args[1]}" "${daemon_args[@]}" "${extra_args[@]:1}"
+      fi
       ;;
     off)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all off --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all off "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all off "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     on)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all on "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all on "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     resume)
-      "${PYTHON_BIN}" "${CLI_LOCAL}" all on --parallel "${ble_parallel}" "${discover_args[@]}" "${debug_args[@]}" "${exclude_args[@]}" "${extra_args[@]}"
+      if [[ "${no_daemon_mode}" -eq 1 ]]; then
+        "${PYTHON_BIN}" "${CLI_LOCAL}" all on "${direct_args[@]}" "${extra_args[@]}"
+      else
+        "${PYTHON_BIN}" "${CLI_DAEMON}" all on "${daemon_args[@]}" "${extra_args[@]}"
+      fi
       ;;
     toggle)
       echo "Toggle is only available via the cloud SwitchBot API right now." >&2
