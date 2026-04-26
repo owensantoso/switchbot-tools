@@ -246,6 +246,68 @@ def set_all_color(
     print_json(results)
 
 
+def set_all_rainbow(
+    token: str,
+    secret: str,
+    brightness: int = 70,
+    parallel: int = 8,
+) -> None:
+    devices = sorted(iter_light_devices(token, secret), key=lambda item: str(item.get("deviceName")))
+    palette = [
+        (255, 0, 0),
+        (255, 127, 0),
+        (255, 255, 0),
+        (0, 200, 0),
+        (0, 120, 255),
+        (75, 0, 130),
+        (148, 0, 211),
+    ]
+
+    def run_for_device(index_and_device: tuple[int, dict[str, Any]]) -> dict[str, Any]:
+        index, dev = index_and_device
+        device_id = str(dev.get("deviceId"))
+        name = str(dev.get("deviceName"))
+        r, g, b = palette[index % len(palette)]
+        turn_on = api_request(
+            "POST",
+            f"/devices/{device_id}/commands",
+            token,
+            secret,
+            command_body("turnOn"),
+        )
+        color = api_request(
+            "POST",
+            f"/devices/{device_id}/commands",
+            token,
+            secret,
+            command_body("setColor", f"{r}:{g}:{b}"),
+        )
+        bright = api_request(
+            "POST",
+            f"/devices/{device_id}/commands",
+            token,
+            secret,
+            command_body("setBrightness", str(brightness)),
+        )
+        return {
+            "deviceId": device_id,
+            "deviceName": name,
+            "rgb": [r, g, b],
+            "turnOn": turn_on.get("body"),
+            "setColor": color.get("body"),
+            "setBrightness": bright.get("body"),
+        }
+
+    results: list[dict[str, Any]] = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, parallel)) as executor:
+        futures = [executor.submit(run_for_device, item) for item in enumerate(devices)]
+        for future in concurrent.futures.as_completed(futures):
+            results.append(future.result())
+
+    results.sort(key=lambda item: item["deviceName"])
+    print_json(results)
+
+
 def set_all_temp(
     token: str,
     secret: str,
@@ -594,6 +656,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_all_gold = sub.add_parser("all-gold", help="Turn all SwitchBot lights on and gold")
     p_all_gold.add_argument("--brightness", type=int, default=100)
     p_all_gold.add_argument("--parallel", type=int, default=8)
+    p_all_rainbow = sub.add_parser("all-rainbow", help="Turn all SwitchBot lights on and spread a rainbow palette")
+    p_all_rainbow.add_argument("--brightness", type=int, default=70)
+    p_all_rainbow.add_argument("--parallel", type=int, default=8)
 
     p_status = sub.add_parser("status", help="Get device status")
     p_status.add_argument("device")
@@ -707,6 +772,11 @@ def main() -> None:
         if not 1 <= args.brightness <= 100:
             parser.error("brightness must be between 1 and 100")
         set_all_gold(token, secret, args.brightness, args.parallel)
+        return
+    if args.cmd == "all-rainbow":
+        if not 1 <= args.brightness <= 100:
+            parser.error("brightness must be between 1 and 100")
+        set_all_rainbow(token, secret, args.brightness, args.parallel)
         return
     if args.cmd == "status":
         get_status(token, secret, resolve_device_id(token, secret, args.device))

@@ -78,9 +78,11 @@ Do not commit `~/.switchbot.env` or paste those values into logs.
 
 ```sh
 switchbot-tools doctor
+switchbot-tools lights purple
+switchbot-tools lights warm-white --brightness 60
+switchbot-tools lights rainbow
 switchbot-tools devices
 switchbot-tools scenes list
-switchbot-tools lights warm-white --brightness 60
 switchbot-tools lights toggle
 switchbot-tools device "Desk lamp" brightness 35
 switchbot-tools scenes run "Movie mode"
@@ -158,6 +160,7 @@ switchbot-tools lights blue
 switchbot-tools lights pink
 switchbot-tools lights orange
 switchbot-tools lights cyan
+switchbot-tools lights rainbow
 switchbot-tools lights warm-white
 switchbot-tools lights cool-white
 switchbot-tools lights daylight
@@ -202,6 +205,8 @@ switchbot-tools lights --ble rgb 255 120 0
 switchbot-tools lights --ble brightness 70
 switchbot-tools lights --ble off
 ```
+
+`rainbow` is currently cloud-only because it intentionally spreads a palette across all cloud-visible lights rather than sending one BLE color to every nearby device.
 
 Use `--discover` to refresh nearby devices before a command:
 

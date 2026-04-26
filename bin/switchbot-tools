@@ -36,7 +36,7 @@ Core commands:
 
 Light actions:
   on | off | resume | toggle | status
-  purple | red | green | blue | pink | orange | cyan | gold | yellow
+  purple | red | green | blue | pink | orange | cyan | gold | yellow | rainbow
   white | warm-white | soft-white | neutral-white | cool-white | daylight
   rgb R G B                   Set an RGB color on all lights
   temp K                      Set color temperature, 2700-6500
@@ -378,7 +378,7 @@ if [[ "${local_mode}" -eq 1 ]]; then
     scan)
       "${PYTHON_BIN}" "${CLI_LOCAL}" scan "${extra_args[@]}"
       ;;
-    dim|scene)
+    dim|scene|rainbow)
       echo "Scenes are only available via the cloud SwitchBot API, not direct BLE." >&2
       exit 2
       ;;
@@ -466,6 +466,8 @@ case "${cmd}" in
       exit 1
     fi
     "${PYTHON_BIN}" "${CLI_CLOUD}" all-brightness "${extra_args[1]}" --parallel 8 "${extra_args[@]:1}"
+  rainbow)
+    "${PYTHON_BIN}" "${CLI_CLOUD}" all-rainbow --parallel 8 "${extra_args[@]}"
     ;;
   off)
     "${PYTHON_BIN}" "${CLI_CLOUD}" all-off --parallel 8 "${extra_args[@]}"
