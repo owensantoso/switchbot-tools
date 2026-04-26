@@ -207,31 +207,69 @@ async def first_device_of_model(model_code: str, timeout: int, address: str | No
     return None
 
 
+async def perform_action_fast(device: Any, args: argparse.Namespace) -> bool:
+    if args.action == "on":
+        device._check_function_support(device._turn_on_command)
+        result = await device._send_command(device._turn_on_command)
+        return device._check_command_result(result, 0, {1})
+    if args.action == "off":
+        device._check_function_support(device._turn_off_command)
+        result = await device._send_command(device._turn_off_command)
+        return device._check_command_result(result, 0, {1})
+    if args.action == "brightness":
+        device._validate_brightness(args.value)
+        device._check_function_support(device._set_brightness_command)
+        result = await device._send_command(device._set_brightness_command.format(f"{args.value:02X}"))
+        return device._check_command_result(result, 0, {1})
+    if args.action == "temp":
+        device._validate_brightness(args.brightness)
+        device._validate_color_temp(args.value)
+        device._check_function_support(device._set_color_temp_command)
+        result = await device._send_command(
+            device._set_color_temp_command.format(f"{args.brightness:02X}{args.value:04X}")
+        )
+        return device._check_command_result(result, 0, {1})
+    if args.action == "color":
+        device._validate_brightness(args.brightness)
+        device._validate_rgb(args.r, args.g, args.b)
+        device._check_function_support(device._set_rgb_command)
+        result = await device._send_command(
+            device._set_rgb_command.format(f"{args.brightness:02X}{args.r:02X}{args.g:02X}{args.b:02X}")
+        )
+        return device._check_command_result(result, 0, {1})
+    raise ValueError(f"Unsupported action: {args.action}")
+
+
 async def perform_action(device: Any, adv: Any, args: argparse.Namespace, logger: BleEventLogger) -> bool:
     logger.event(
         "device_action_started",
         action=args.action,
         device_name=adv.device.name,
         address=adv.device.address,
+        mode="legacy" if args.full_update else "fast",
     )
-    if args.action == "on":
-        result = await device.turn_on()
-    elif args.action == "off":
-        result = await device.turn_off()
-    elif args.action == "brightness":
-        result = await device.set_brightness(args.value)
-    elif args.action == "temp":
-        result = await device.set_color_temp(args.brightness, args.value)
-    elif args.action == "color":
-        result = await device.set_rgb(args.brightness, args.r, args.g, args.b)
+    if args.full_update:
+        if args.action == "on":
+            result = await device.turn_on()
+        elif args.action == "off":
+            result = await device.turn_off()
+        elif args.action == "brightness":
+            result = await device.set_brightness(args.value)
+        elif args.action == "temp":
+            result = await device.set_color_temp(args.brightness, args.value)
+        elif args.action == "color":
+            result = await device.set_rgb(args.brightness, args.r, args.g, args.b)
+        else:
+            raise ValueError(f"Unsupported action: {args.action}")
     else:
-        raise ValueError(f"Unsupported action: {args.action}")
+        result = await perform_action_fast(device, args)
     logger.event(
         "device_action_finished",
         action=args.action,
         device_name=adv.device.name,
         address=adv.device.address,
         ok=bool(result),
+        mode="legacy" if args.full_update else "fast",
     )
     return result
 
@@ -437,11 +475,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_control.add_argument("--b", type=int, default=255)
     p_control.add_argument("--debug", "--verbose", "-v", action="store_true", dest="verbose")
     p_control.add_argument("--jsonl-path")
+    p_control.add_argument("--full-update", action="store_true")
 
     p_all = sub.add_parser("all", help="Control all nearby SwitchBot bulbs/strips over BLE")
     p_all.add_argument("action", choices=["on", "off", "brightness", "temp", "color"])
     p_all.add_argument("--timeout", type=int, default=3)
-    p_all.add_argument("--parallel", type=int, default=4)
+    p_all.add_argument("--parallel", type=int, default=6)
     p_all.add_argument("--discover", action="store_true")
     p_all.add_argument("--value", type=int)
     p_all.add_argument("--brightness", type=int, default=100)
@@ -450,6 +489,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument("--b", type=int, default=255)
     p_all.add_argument("--debug", "--verbose", "-v", action="store_true", dest="verbose")
     p_all.add_argument("--jsonl-path")
+    p_all.add_argument("--full-update", action="store_true")
 
     return parser
 

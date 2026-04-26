@@ -191,6 +191,8 @@ switchbot-tools raw brightness DEVICE_ID 35
 
 BLE mode talks directly to nearby SwitchBot bulbs and light strips using `PySwitchbot`.
 
+By default, BLE writes now use a fast path that skips the library's extra post-write refresh and uses a default BLE parallelism of `6`. You can override the concurrency with `--parallel N` or `SWITCHBOT_BLE_PARALLEL`.
+
 Scan first:
 
 ```sh
@@ -237,6 +239,7 @@ Useful commands:
 switchbot-tools lights --ble scan --timeout 5 --verbose
 switchbot-tools lights --ble --discover warm-white --brightness 60 --verbose
 switchbot-tools lights --ble warm-white --brightness 60 --verbose
+switchbot-tools lights --ble warm-white --brightness 60 --parallel 6 --verbose
 ```
 
 To send the JSONL somewhere else:
@@ -249,6 +252,18 @@ Or with an environment variable:
 
 ```sh
 export SWITCHBOT_BLE_LOG_PATH=/tmp/switchbot-ble.jsonl
+```
+
+If you want to compare against the old library behavior with the extra post-write refresh, the lower-level BLE script still supports:
+
+```sh
+python scripts/switchbot_ble.py all temp --value 2700 --brightness 60 --parallel 6 --full-update
+```
+
+The repo also includes a local benchmark runner:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\benchmark_ble.ps1 -Action warm-white -Brightness 60 -Parallel 6 -DiscoverIterations 1 -CachedIterations 2
 ```
 
 ## Troubleshooting

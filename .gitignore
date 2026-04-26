@@ -8,3 +8,4 @@ env/
 .switchbot.env
 .switchbot_ble_lights.json
 logs/
+benchmark-logs/
