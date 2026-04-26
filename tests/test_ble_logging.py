@@ -50,6 +50,25 @@ class BleLoggingTests(unittest.TestCase):
         self.assertTrue(args.verbose)
         self.assertEqual(args.jsonl_path, "C:\\logs\\switchbot-ble.jsonl")
 
+    def test_parser_accepts_excluded_addresses_for_all_mode(self) -> None:
+        parser = switchbot_ble.build_parser()
+
+        args = parser.parse_args(
+            [
+                "all",
+                "off",
+                "--exclude-address",
+                "F0:9E:9E:9E:E8:02",
+                "--exclude-address",
+                "AA:BB:CC:DD:EE:FF",
+            ]
+        )
+
+        self.assertEqual(
+            args.exclude_address,
+            ["F0:9E:9E:9E:E8:02", "AA:BB:CC:DD:EE:FF"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

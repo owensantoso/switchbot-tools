@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import uuid
 
 from switchbot import GetSwitchbotDevices, SwitchbotBulb, SwitchbotLightStrip
+from switchbot.utils import format_mac_upper
 
 
 CACHE_FILE = Path.home() / ".switchbot_ble_lights.json"
@@ -67,6 +68,21 @@ def resolve_log_path(configured: str | None) -> Path:
     if from_env:
         return Path(from_env)
     return DEFAULT_LOG_PATH
+
+
+def resolve_excluded_addresses(values: list[str] | None) -> set[str]:
+    addresses: set[str] = set()
+    configured = os.environ.get("SWITCHBOT_BLE_EXCLUDE_ADDRESSES", "")
+    if configured:
+        for item in configured.split(","):
+            trimmed = item.strip()
+            if trimmed:
+                addresses.add(format_mac_upper(trimmed))
+    for item in values or []:
+        trimmed = item.strip()
+        if trimmed:
+            addresses.add(format_mac_upper(trimmed))
+    return addresses
 
 
 class CachedAddressDevice(str):
@@ -328,12 +344,14 @@ async def control(args: argparse.Namespace, logger: BleEventLogger) -> int:
 
 async def all_lights(args: argparse.Namespace, logger: BleEventLogger) -> int:
     started = time.monotonic()
+    excluded_addresses = resolve_excluded_addresses(getattr(args, "exclude_address", None))
     logger.event(
         "all_lights_started",
         action=args.action,
         timeout=args.timeout,
         parallel=args.parallel,
         discover=bool(args.discover),
+        excluded_count=len(excluded_addresses),
     )
     light_advs: list[Any]
     source: str
@@ -360,6 +378,24 @@ async def all_lights(args: argparse.Namespace, logger: BleEventLogger) -> int:
             else f"No nearby SwitchBot lights found over BLE during {args.timeout}s scan.",
             file=sys.stderr,
         )
+        return 2
+
+    if excluded_addresses:
+        before = len(light_advs)
+        retained = [
+            adv for adv in light_advs if format_mac_upper(str(adv.device.address)) not in excluded_addresses
+        ]
+        skipped = before - len(retained)
+        light_advs = retained
+        logger.event(
+            "excluded_addresses_applied",
+            excluded_count=len(excluded_addresses),
+            skipped=skipped,
+            remaining=len(light_advs),
+        )
+    if not light_advs:
+        logger.event("all_lights_failed", action=args.action, error="all_lights_excluded", source=source)
+        print("All cached/discovered lights were excluded from this BLE command.", file=sys.stderr)
         return 2
 
     semaphore = asyncio.Semaphore(max(1, args.parallel))
@@ -490,6 +526,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument("--debug", "--verbose", "-v", action="store_true", dest="verbose")
     p_all.add_argument("--jsonl-path")
     p_all.add_argument("--full-update", action="store_true")
+    p_all.add_argument("--exclude-address", action="append", default=[])
 
     return parser
 

@@ -191,7 +191,7 @@ switchbot-tools raw brightness DEVICE_ID 35
 
 BLE mode talks directly to nearby SwitchBot bulbs and light strips using `PySwitchbot`.
 
-By default, BLE writes now use a fast path that skips the library's extra post-write refresh and uses a default BLE parallelism of `6`. You can override the concurrency with `--parallel N` or `SWITCHBOT_BLE_PARALLEL`.
+By default, BLE writes now use a fast path that skips the library's extra post-write refresh and uses a default BLE parallelism of `6`. You can override the concurrency with `--parallel N` or `SWITCHBOT_BLE_PARALLEL`. You can also exclude flaky devices with `--exclude-address` or `SWITCHBOT_BLE_EXCLUDE_ADDRESSES`.
 
 Scan first:
 
@@ -240,6 +240,7 @@ switchbot-tools lights --ble scan --timeout 5 --verbose
 switchbot-tools lights --ble --discover warm-white --brightness 60 --verbose
 switchbot-tools lights --ble warm-white --brightness 60 --verbose
 switchbot-tools lights --ble warm-white --brightness 60 --parallel 6 --verbose
+switchbot-tools lights --ble off --parallel 6 --exclude-address F0:9E:9E:9E:E8:02 --verbose
 ```
 
 To send the JSONL somewhere else:
@@ -252,6 +253,7 @@ Or with an environment variable:
 
 ```sh
 export SWITCHBOT_BLE_LOG_PATH=/tmp/switchbot-ble.jsonl
+export SWITCHBOT_BLE_EXCLUDE_ADDRESSES=F0:9E:9E:9E:E8:02
 ```
 
 If you want to compare against the old library behavior with the extra post-write refresh, the lower-level BLE script still supports:
